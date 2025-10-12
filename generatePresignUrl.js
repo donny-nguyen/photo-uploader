@@ -6,9 +6,11 @@ const BUCKET_NAME = process.env.BUCKET_NAME;
 
 export const handler = async (event) => {
   try {
-    const body = event.body ? JSON.parse(event.body) : {};
-    const key = body.key;
-    const operation = body.operation || "get_object"; // default to GET
+    console.log('generatePresignUrl.handler() event:', event);
+    const key = event.key;
+    console.log('generatePresignUrl.handler() key:', key);
+    const operation = event.operation || "get_object"; // default to GET
+    console.log('generatePresignUrl.handler() operation:', operation);
 
     if (!key) {
       return response(400, { error: "Missing 'key' parameter" });
