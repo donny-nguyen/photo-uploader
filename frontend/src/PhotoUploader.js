@@ -75,9 +75,9 @@ export default function PhotoUploader() {
 
     try {
       // Generate a unique key for the file
-      const timestamp = Date.now();
+      const isoDateTime = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const key = `uploads/${timestamp}_${sanitizedFileName}`;
+      const key = `${isoDateTime}_${sanitizedFileName}`;
 
       // Step 1: Get presigned URL for upload
       setStatus({ type: 'info', message: 'Getting presigned URL...' });
