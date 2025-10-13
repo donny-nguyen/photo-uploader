@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Upload, CheckCircle, AlertCircle, Loader2, ImageIcon } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, Loader2, Image } from 'lucide-react';
 
 export default function PhotoUploader() {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [description, setDescription] = useState('');
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState(null);
   const [uploadedUrl, setUploadedUrl] = useState(null);
@@ -22,7 +23,6 @@ export default function PhotoUploader() {
       setStatus(null);
       setUploadedUrl(null);
       
-      // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result);
@@ -31,13 +31,18 @@ export default function PhotoUploader() {
     }
   };
 
-  const getPresignedUrl = async (key, operation) => {
+  const getPresignedUrl = async (key, operation, description = null) => {
+    const payload = { key, operation };
+    if (description !== null && operation === 'put_object') {
+      payload.description = description;
+    }
+
     const response = await fetch(API_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ key, operation }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -74,26 +79,22 @@ export default function PhotoUploader() {
     setStatus(null);
 
     try {
-      // Generate a unique key for the file
       const isoDateTime = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-');
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const key = `${isoDateTime}_${sanitizedFileName}`;
 
-      // Step 1: Get presigned URL for upload
       setStatus({ type: 'info', message: 'Getting presigned URL...' });
-      const presignedUrl = await getPresignedUrl(key, 'put_object');
+      const presignedUrl = await getPresignedUrl(key, 'put_object', description);
 
-      // Step 2: Upload file to S3
       setStatus({ type: 'info', message: 'Uploading file...' });
       await uploadToS3(presignedUrl, file);
 
-      // Step 3: Get presigned URL for viewing (optional)
       const viewUrl = await getPresignedUrl(key, 'get_object');
       setUploadedUrl(viewUrl);
 
       setStatus({ 
         type: 'success', 
-        message: `File uploaded successfully as: ${key}` 
+        message: `File uploaded successfully with description saved!` 
       });
     } catch (error) {
       console.error('Upload error:', error);
@@ -109,6 +110,7 @@ export default function PhotoUploader() {
   const resetUpload = () => {
     setFile(null);
     setPreview(null);
+    setDescription('');
     setStatus(null);
     setUploadedUrl(null);
   };
@@ -119,13 +121,12 @@ export default function PhotoUploader() {
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-100 rounded-full mb-4">
-              <ImageIcon className="w-8 h-8 text-indigo-600" />
+              <Image className="w-8 h-8 text-indigo-600" />
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Photo Uploader</h1>
-            <p className="text-gray-600">Upload your images to AWS S3</p>
+            <p className="text-gray-600">Upload your images to AWS S3 with descriptions</p>
           </div>
 
-          {/* File Input */}
           <div className="mb-6">
             <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 transition-all">
               <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -145,7 +146,6 @@ export default function PhotoUploader() {
             </label>
           </div>
 
-          {/* Preview */}
           {preview && (
             <div className="mb-6">
               <div className="relative rounded-lg overflow-hidden border-2 border-gray-200">
@@ -162,7 +162,24 @@ export default function PhotoUploader() {
             </div>
           )}
 
-          {/* Upload Button */}
+          {file && (
+            <div className="mb-6">
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                Image Description
+              </label>
+              <textarea
+                id="description"
+                rows="3"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Enter a description for your image..."
+                disabled={uploading}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+              />
+              <p className="mt-1 text-xs text-gray-500">Optional: Add details about this image</p>
+            </div>
+          )}
+
           <button
             onClick={handleUpload}
             disabled={!file || uploading}
@@ -181,7 +198,6 @@ export default function PhotoUploader() {
             )}
           </button>
 
-          {/* Status Messages */}
           {status && (
             <div className={`mt-6 p-4 rounded-lg flex items-start gap-3 ${
               status.type === 'success' ? 'bg-green-50 border border-green-200' :
@@ -203,7 +219,6 @@ export default function PhotoUploader() {
             </div>
           )}
 
-          {/* View Uploaded Image */}
           {uploadedUrl && (
             <div className="mt-6">
               <div className="flex items-center justify-between mb-3">
@@ -222,6 +237,12 @@ export default function PhotoUploader() {
                   className="w-full h-64 object-cover"
                 />
               </div>
+              {description && (
+                <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-sm font-medium text-gray-700 mb-1">Description:</p>
+                  <p className="text-sm text-gray-600">{description}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
