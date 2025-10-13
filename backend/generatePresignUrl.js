@@ -26,27 +26,27 @@ export const handler = async (event) => {
       command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: key });
     } else if (operation === "put_object") {
       command = new PutObjectCommand({ Bucket: BUCKET_NAME, Key: key });
-      
-      // Save metadata to DynamoDB after generating presigned URL for upload
-      if (description !== undefined) {
-        const timestamp = new Date().toISOString();
-        
-        await docClient.send(new PutCommand({
-          TableName: TABLE_NAME,
-          Item: {
-            imageKey: key,
-            description: description || "",
-            uploadedAt: timestamp,
-            s3Bucket: BUCKET_NAME,
-            s3Key: key
-          }
-        }));
-      }
     } else {
       return response(400, { error: "Invalid operation. Must be 'get_object' or 'put_object'." });
     }
 
     const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+    
+    // Save metadata to DynamoDB after generating presigned URL for upload
+    if (operation === "put_object" && description !== undefined) {
+      const timestamp = new Date().toISOString();
+      const imageUrl = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      
+      await docClient.send(new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          imageKey: key,
+          description: description || "",
+          uploadedAt: timestamp,
+          imageUrl: imageUrl
+        }
+      }));
+    }
 
     return response(200, { url });
   } catch (err) {
