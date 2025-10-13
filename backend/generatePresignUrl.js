@@ -8,7 +8,8 @@ const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const BUCKET_NAME = process.env.BUCKET_NAME;
-const TABLE_NAME = process.env.TABLE_NAME; // Add this to your Lambda environment variables
+const TABLE_NAME = process.env.TABLE_NAME;
+const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN; // e.g., d1234abcd.cloudfront.net
 
 export const handler = async (event) => {
   try {
@@ -35,7 +36,11 @@ export const handler = async (event) => {
     // Save metadata to DynamoDB after generating presigned URL for upload
     if (operation === "put_object" && description !== undefined) {
       const timestamp = new Date().toISOString();
-      const imageUrl = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      
+      // Use CloudFront URL
+      const imageUrl = CLOUDFRONT_DOMAIN 
+        ? `https://${CLOUDFRONT_DOMAIN}/${key}`
+        : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
       
       await docClient.send(new PutCommand({
         TableName: TABLE_NAME,
