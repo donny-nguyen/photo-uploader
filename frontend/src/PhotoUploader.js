@@ -110,14 +110,6 @@ export default function PhotoUploader() {
     }
   };
 
-  const resetUpload = () => {
-    setFile(null);
-    setPreview(null);
-    setDescription('');
-    setStatus(null);
-    setUploadedUrl(null);
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4">
       <div className="max-w-2xl mx-auto">
@@ -226,12 +218,6 @@ export default function PhotoUploader() {
             <div className="mt-6">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-semibold text-gray-900">Uploaded Image</h3>
-                <button
-                  onClick={resetUpload}
-                  className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
-                >
-                  Upload Another
-                </button>
               </div>
               <div className="rounded-lg overflow-hidden border-2 border-green-200">
                 <img
