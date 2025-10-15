@@ -96,6 +96,9 @@ export default function PhotoUploader() {
         type: 'success', 
         message: `File uploaded successfully with description saved!` 
       });
+      setFile(null);
+      setPreview(null);
+      setDescription('');
     } catch (error) {
       console.error('Upload error:', error);
       setStatus({ 
