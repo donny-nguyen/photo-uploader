@@ -9,16 +9,24 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const TABLE_NAME = process.env.TABLE_NAME;
-const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN; // e.g., d1234abcd.cloudfront.net
+const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;
+
+// Define the function version
+const FUNCTION_VERSION = "1.0.0"; // Update this manually or inject via environment variables
 
 export const handler = async (event) => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const key = body.key;
     const operation = body.operation || "get_object";
+    const key = body.key;
     const description = body.description;
 
-    if (!key) {
+    // Handle version check
+    if (operation === "get_version") {
+      return response(200, { version: FUNCTION_VERSION });
+    }
+
+    if (!key && operation !== "get_version") {
       return response(400, { error: "Missing 'key' parameter" });
     }
 
@@ -28,20 +36,17 @@ export const handler = async (event) => {
     } else if (operation === "put_object") {
       command = new PutObjectCommand({ Bucket: BUCKET_NAME, Key: key });
     } else {
-      return response(400, { error: "Invalid operation. Must be 'get_object' or 'put_object'." });
+      return response(400, { error: "Invalid operation. Must be 'get_object', 'put_object', or 'get_version'." });
     }
 
     const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-    
-    // Save metadata to DynamoDB after generating presigned URL for upload
+
     if (operation === "put_object" && description !== undefined) {
       const timestamp = new Date().toISOString();
-      
-      // Use CloudFront URL
-      const imageUrl = CLOUDFRONT_DOMAIN 
+      const imageUrl = CLOUDFRONT_DOMAIN
         ? `https://${CLOUDFRONT_DOMAIN}/${key}`
         : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-      
+
       await docClient.send(new PutCommand({
         TableName: TABLE_NAME,
         Item: {
@@ -55,7 +60,7 @@ export const handler = async (event) => {
 
     return response(200, { url });
   } catch (err) {
-    console.error("Error generating pre-signed URL:", err);
+    console.error("Error:", err);
     return response(500, { error: err.message || "Internal Server Error" });
   }
 };
