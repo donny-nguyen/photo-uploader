@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Upload, CheckCircle, AlertCircle, Loader2, Image } from 'lucide-react';
+import packageJson from '../package.json'; // Import as default export
 
 export default function PhotoUploader() {
   const [file, setFile] = useState(null);
@@ -234,6 +235,10 @@ export default function PhotoUploader() {
               )}
             </div>
           )}
+
+          <div className="mt-8 text-center text-gray-500 text-sm">
+            <p>Version: {packageJson.version}</p>
+          </div>
         </div>
       </div>
     </div>
