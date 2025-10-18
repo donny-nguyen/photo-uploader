@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
@@ -30,32 +30,38 @@ export const handler = async (event) => {
       return response(400, { error: "Missing 'key' parameter" });
     }
 
-    let command;
+    let url;
     if (operation === "get_object") {
-      command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: key });
+      // Generate CloudFront URL directly without presigning
+      if (CLOUDFRONT_DOMAIN) {
+        url = `https://${CLOUDFRONT_DOMAIN}/${key}`;
+      } else {
+        // Fallback to S3 URL if CloudFront domain is not configured
+        url = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      }
     } else if (operation === "put_object") {
-      command = new PutObjectCommand({ Bucket: BUCKET_NAME, Key: key });
+      const command = new PutObjectCommand({ Bucket: BUCKET_NAME, Key: key });
+      url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+      // Store metadata in DynamoDB
+      if (description !== undefined) {
+        const timestamp = new Date().toISOString();
+        const imageUrl = CLOUDFRONT_DOMAIN
+          ? `https://${CLOUDFRONT_DOMAIN}/${key}`
+          : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+
+        await docClient.send(new PutCommand({
+          TableName: TABLE_NAME,
+          Item: {
+            imageKey: key,
+            description: description || "",
+            uploadedAt: timestamp,
+            imageUrl: imageUrl
+          }
+        }));
+      }
     } else {
       return response(400, { error: "Invalid operation. Must be 'get_object', 'put_object', or 'get_version'." });
-    }
-
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-
-    if (operation === "put_object" && description !== undefined) {
-      const timestamp = new Date().toISOString();
-      const imageUrl = CLOUDFRONT_DOMAIN
-        ? `https://${CLOUDFRONT_DOMAIN}/${key}`
-        : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-
-      await docClient.send(new PutCommand({
-        TableName: TABLE_NAME,
-        Item: {
-          imageKey: key,
-          description: description || "",
-          uploadedAt: timestamp,
-          imageUrl: imageUrl
-        }
-      }));
     }
 
     return response(200, { url });
