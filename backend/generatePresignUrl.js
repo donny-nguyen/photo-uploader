@@ -10,9 +10,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const TABLE_NAME = process.env.TABLE_NAME;
 const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;
-
-// Define the function version
-const FUNCTION_VERSION = "1.0.0"; // Update this manually or inject via environment variables
+const FUNCTION_VERSION = "1.1.0";
 
 export const handler = async (event) => {
   try {
