@@ -2,6 +2,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
+import crypto from "crypto";
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION });
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -11,6 +12,19 @@ const BUCKET_NAME = process.env.BUCKET_NAME;
 const TABLE_NAME = process.env.TABLE_NAME;
 const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;
 const FUNCTION_VERSION = "1.1.0";
+const AUTH_PASSWORD = process.env.AUTH_PASSWORD;
+const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY, "base64"); // 32 bytes
+
+function decryptPassword(encrypted) {
+  const buffer = Buffer.from(encrypted, "base64");
+  const iv = buffer.subarray(0, 16); // first 16 bytes
+  const encryptedText = buffer.subarray(16);
+
+  const decipher = crypto.createDecipheriv("aes-256-cbc", ENCRYPTION_KEY, iv);
+  let decrypted = decipher.update(encryptedText);
+  decrypted = Buffer.concat([decrypted, decipher.final()]);
+  return decrypted.toString("utf8");
+}
 
 export const handler = async (event) => {
   try {
@@ -18,30 +32,40 @@ export const handler = async (event) => {
     const operation = body.operation || "get_object";
     const key = body.key;
     const description = body.description;
+    const encryptedPassword = body.password;
 
-    // Handle version check
     if (operation === "get_version") {
       return response(200, { version: FUNCTION_VERSION });
     }
 
-    if (!key && operation !== "get_version") {
+    if (!encryptedPassword) {
+      return response(401, { error: "Unauthorized: Missing password" });
+    }
+
+    let decryptedPassword;
+    try {
+      decryptedPassword = decryptPassword(encryptedPassword);
+    } catch (err) {
+      return response(401, { error: "Unauthorized: Failed to decrypt password" });
+    }
+
+    if (decryptedPassword !== AUTH_PASSWORD) {
+      return response(401, { error: "Unauthorized: Invalid password" });
+    }
+
+    if (!key) {
       return response(400, { error: "Missing 'key' parameter" });
     }
 
     let url;
     if (operation === "get_object") {
-      // Generate CloudFront URL directly without presigning
-      if (CLOUDFRONT_DOMAIN) {
-        url = `https://${CLOUDFRONT_DOMAIN}/${key}`;
-      } else {
-        // Fallback to S3 URL if CloudFront domain is not configured
-        url = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-      }
+      url = CLOUDFRONT_DOMAIN
+        ? `https://${CLOUDFRONT_DOMAIN}/${key}`
+        : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
     } else if (operation === "put_object") {
       const command = new PutObjectCommand({ Bucket: BUCKET_NAME, Key: key });
       url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
 
-      // Store metadata in DynamoDB
       if (description !== undefined) {
         const timestamp = new Date().toISOString();
         const imageUrl = CLOUDFRONT_DOMAIN
