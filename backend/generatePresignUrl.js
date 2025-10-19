@@ -11,7 +11,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const TABLE_NAME = process.env.TABLE_NAME;
 const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;
-const FUNCTION_VERSION = "1.1.0";
+const FUNCTION_VERSION = "2.0.0";
 const AUTH_PASSWORD = process.env.AUTH_PASSWORD;
 const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY, "base64"); // 32 bytes
 
