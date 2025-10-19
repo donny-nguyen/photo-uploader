@@ -9,6 +9,7 @@ export default function PhotoUploader() {
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState(null);
   const [uploadedUrl, setUploadedUrl] = useState(null);
+  const [password, setPassword] = useState("");
 
   // API endpoints
   const PRESIGN_API = 'https://0yr7gwy1qb.execute-api.us-east-1.amazonaws.com/prod/presign-url';
@@ -34,19 +35,63 @@ export default function PhotoUploader() {
     }
   };
 
-  // Get presigned URL from backend
+  async function encryptPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+
+    // Derive encryption key
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode("static-secret-salt"), // replace with secure method
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
+
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: encoder.encode("unique-salt"),
+        iterations: 100000,
+        hash: "SHA-256"
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      true,
+      ["encrypt"]
+    );
+
+    // Random IV for each encryption
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    const encrypted = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      data
+    );
+
+    // Combine IV with ciphertext in base64 for easy transmission
+    const combined = new Uint8Array(iv.byteLength + encrypted.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(encrypted), iv.byteLength);
+
+    return btoa(String.fromCharCode(...combined));
+  }
+
   const getPresignedUrl = async (key, operation, description = null) => {
-    const payload = { key, operation };
-    if (description !== null && operation === 'put_object') {
+    const encryptedPassword = await encryptPassword(password);
+
+    const payload = { key, operation, encryptedPassword };
+    if (description !== null && operation === "putobject") {
       payload.description = description;
     }
 
     const response = await fetch(PRESIGN_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
+    
     if (!response.ok) {
       throw new Error(`Failed to get presigned URL: ${response.statusText}`);
     }
@@ -55,7 +100,6 @@ export default function PhotoUploader() {
     return data.url;
   };
 
-  // Upload image to S3
   const uploadToS3 = async (presignedUrl, file) => {
     const response = await fetch(presignedUrl, {
       method: 'PUT',
@@ -93,10 +137,13 @@ export default function PhotoUploader() {
     console.log('Email sent:', data);
   };
 
-  // Handle upload button
   const handleUpload = async () => {
     if (!file) {
-      setStatus({ type: 'error', message: 'Please select a file first' });
+      setStatus({ type: "error", message: "Please select a file first." });
+      return;
+    }
+    if (!password) {
+      setStatus({ type: "error", message: "Please enter a password." });
       return;
     }
 
@@ -202,6 +249,22 @@ export default function PhotoUploader() {
               <p className="mt-1 text-xs text-gray-500">Optional: Add details about this image</p>
             </div>
           )}
+
+          <div className="mb-6">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              disabled={uploading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+            />
+            <p className="mt-1 text-xs text-gray-500">Required for secure upload</p>
+          </div>
 
           <button
             onClick={handleUpload}
