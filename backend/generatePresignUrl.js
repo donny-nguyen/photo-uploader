@@ -12,18 +12,30 @@ const BUCKET_NAME = process.env.BUCKET_NAME;
 const TABLE_NAME = process.env.TABLE_NAME;
 const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;
 const FUNCTION_VERSION = "2.0.0";
+
 const AUTH_PASSWORD = process.env.AUTH_PASSWORD;
-const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY, "base64"); // 32 bytes
+const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY, "base64"); // 32 bytes key
 
-function decryptPassword(encrypted) {
-  const buffer = Buffer.from(encrypted, "base64");
-  const iv = buffer.subarray(0, 16); // first 16 bytes
+// AES-256-CBC decryption
+function decryptPassword(encryptedBase64) {
+  const buffer = Buffer.from(encryptedBase64, "base64");
+  const iv = buffer.subarray(0, 16);
   const encryptedText = buffer.subarray(16);
-
   const decipher = crypto.createDecipheriv("aes-256-cbc", ENCRYPTION_KEY, iv);
   let decrypted = decipher.update(encryptedText);
   decrypted = Buffer.concat([decrypted, decipher.final()]);
   return decrypted.toString("utf8");
+}
+
+function response(statusCode, body) {
+  return {
+    statusCode,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  };
 }
 
 export const handler = async (event) => {
@@ -72,18 +84,22 @@ export const handler = async (event) => {
           ? `https://${CLOUDFRONT_DOMAIN}/${key}`
           : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 
-        await docClient.send(new PutCommand({
-          TableName: TABLE_NAME,
-          Item: {
-            imageKey: key,
-            description: description || "",
-            uploadedAt: timestamp,
-            imageUrl: imageUrl
-          }
-        }));
+        await docClient.send(
+          new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+              imageKey: key,
+              description: description || "",
+              uploadedAt: timestamp,
+              imageUrl: imageUrl,
+            },
+          })
+        );
       }
     } else {
-      return response(400, { error: "Invalid operation. Must be 'get_object', 'put_object', or 'get_version'." });
+      return response(400, {
+        error: "Invalid operation. Must be 'get_object', 'put_object', or 'get_version'.",
+      });
     }
 
     return response(200, { url });
@@ -92,14 +108,3 @@ export const handler = async (event) => {
     return response(500, { error: err.message || "Internal Server Error" });
   }
 };
-
-function response(statusCode, body) {
-  return {
-    statusCode,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  };
-}

@@ -37,40 +37,19 @@ export default function PhotoUploader() {
 
   async function encryptPassword(password) {
     const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-
-    // Derive encryption key
     const keyMaterial = await crypto.subtle.importKey(
       "raw",
-      encoder.encode("static-secret-salt"), // replace with secure method
-      { name: "PBKDF2" },
+      Uint8Array.from(atob("your-32-byte-base64-key"), c => c.charCodeAt(0)),
+      { name: "AES-CBC" },
       false,
-      ["deriveKey"]
-    );
-
-    const key = await crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: encoder.encode("unique-salt"),
-        iterations: 100000,
-        hash: "SHA-256"
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      true,
       ["encrypt"]
     );
 
-    // Random IV for each encryption
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const iv = crypto.getRandomValues(new Uint8Array(16));
+    const data = encoder.encode(password);
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-CBC", iv }, keyMaterial, data);
 
-    const encrypted = await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
-      key,
-      data
-    );
-
-    // Combine IV with ciphertext in base64 for easy transmission
+    // Combine IV + ciphertext
     const combined = new Uint8Array(iv.byteLength + encrypted.byteLength);
     combined.set(iv, 0);
     combined.set(new Uint8Array(encrypted), iv.byteLength);
@@ -91,7 +70,7 @@ export default function PhotoUploader() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    
+
     if (!response.ok) {
       throw new Error(`Failed to get presigned URL: ${response.statusText}`);
     }
@@ -287,13 +266,12 @@ export default function PhotoUploader() {
           {/* Status message */}
           {status && (
             <div
-              className={`mt-6 p-4 rounded-lg flex items-start gap-3 ${
-                status.type === 'success'
-                  ? 'bg-green-50 border border-green-200'
-                  : status.type === 'error'
+              className={`mt-6 p-4 rounded-lg flex items-start gap-3 ${status.type === 'success'
+                ? 'bg-green-50 border border-green-200'
+                : status.type === 'error'
                   ? 'bg-red-50 border border-red-200'
                   : 'bg-blue-50 border border-blue-200'
-              }`}
+                }`}
             >
               {status.type === 'success' && (
                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -306,13 +284,12 @@ export default function PhotoUploader() {
               )}
               <div className="flex-1">
                 <p
-                  className={`text-sm font-medium ${
-                    status.type === 'success'
-                      ? 'text-green-800'
-                      : status.type === 'error'
+                  className={`text-sm font-medium ${status.type === 'success'
+                    ? 'text-green-800'
+                    : status.type === 'error'
                       ? 'text-red-800'
                       : 'text-blue-800'
-                  }`}
+                    }`}
                 >
                   {status.message}
                 </p>
