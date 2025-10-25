@@ -77,7 +77,7 @@ export default function PhotoUploader() {
       <h3>A new image has been uploaded!</h3>
       <p><strong>Description:</strong> ${description || 'No description provided'}</p>
       <p><strong>View Image:</strong></p>
-      <p><img src="${imageUrl}" alt="Uploaded Image" style="max-width:100%; height:auto;" /></p>
+      <p><img src="${imageUrl}" alt="Uploaded Image" style="max-width:800px; max-height:800px; width:auto; height:auto;" /></p>
     `;
 
     const response = await fetch(EMAIL_API, {
