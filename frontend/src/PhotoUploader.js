@@ -9,6 +9,7 @@ export default function PhotoUploader() {
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState(null);
   const [uploadedUrl, setUploadedUrl] = useState(null);
+  const [password, setPassword] = useState("");
 
   // API endpoints
   const PRESIGN_API = 'https://0yr7gwy1qb.execute-api.us-east-1.amazonaws.com/prod/presign-url';
@@ -34,18 +35,54 @@ export default function PhotoUploader() {
     }
   };
 
-  // Get presigned URL from backend
+  async function encryptPassword(password) {
+    const encoder = new TextEncoder();
+
+    const base64Key = process.env.REACT_APP_AES_KEY;
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      Uint8Array.from(atob(base64Key), c => c.charCodeAt(0)),
+      { name: "AES-CBC" },
+      false,
+      ["encrypt"]
+    );
+
+    const iv = crypto.getRandomValues(new Uint8Array(16));
+    const data = encoder.encode(password);
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-CBC", iv }, keyMaterial, data);
+
+    // Combine IV + ciphertext
+    const combined = new Uint8Array(iv.byteLength + encrypted.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(encrypted), iv.byteLength);
+
+    return btoa(String.fromCharCode(...combined));
+  }
+
   const getPresignedUrl = async (key, operation, description = null) => {
-    const payload = { key, operation };
-    if (description !== null && operation === 'put_object') {
+    const encryptedPassword = await encryptPassword(password);
+
+    const payload = { key, operation, password: encryptedPassword };
+    if (description !== null && operation === "put_object") {
       payload.description = description;
     }
 
     const response = await fetch(PRESIGN_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
+    // Explicitly check for 401 Unauthorized
+    if (response.status === 401) {
+      const errorJson = await response.json();
+      // Set status to show error to user
+      setStatus({
+        type: "error",
+        message: errorJson.error || "Unauthorized: Invalid password",
+      });
+      throw new Error("Unauthorized: Invalid password");
+    }
 
     if (!response.ok) {
       throw new Error(`Failed to get presigned URL: ${response.statusText}`);
@@ -55,7 +92,6 @@ export default function PhotoUploader() {
     return data.url;
   };
 
-  // Upload image to S3
   const uploadToS3 = async (presignedUrl, file) => {
     const response = await fetch(presignedUrl, {
       method: 'PUT',
@@ -94,10 +130,13 @@ export default function PhotoUploader() {
     console.log('Email sent:', data);
   };
 
-  // Handle upload button
   const handleUpload = async () => {
     if (!file) {
-      setStatus({ type: 'error', message: 'Please select a file first' });
+      setStatus({ type: "error", message: "Please select a file first." });
+      return;
+    }
+    if (!password) {
+      setStatus({ type: "error", message: "Please enter a password." });
       return;
     }
 
@@ -204,6 +243,22 @@ export default function PhotoUploader() {
             </div>
           )}
 
+          <div className="mb-6">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              disabled={uploading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+            />
+            <p className="mt-1 text-xs text-gray-500">Required for secure upload</p>
+          </div>
+
           <button
             onClick={handleUpload}
             disabled={!file || uploading}
@@ -225,13 +280,12 @@ export default function PhotoUploader() {
           {/* Status message */}
           {status && (
             <div
-              className={`mt-6 p-4 rounded-lg flex items-start gap-3 ${
-                status.type === 'success'
-                  ? 'bg-green-50 border border-green-200'
-                  : status.type === 'error'
+              className={`mt-6 p-4 rounded-lg flex items-start gap-3 ${status.type === 'success'
+                ? 'bg-green-50 border border-green-200'
+                : status.type === 'error'
                   ? 'bg-red-50 border border-red-200'
                   : 'bg-blue-50 border border-blue-200'
-              }`}
+                }`}
             >
               {status.type === 'success' && (
                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -244,13 +298,12 @@ export default function PhotoUploader() {
               )}
               <div className="flex-1">
                 <p
-                  className={`text-sm font-medium ${
-                    status.type === 'success'
-                      ? 'text-green-800'
-                      : status.type === 'error'
+                  className={`text-sm font-medium ${status.type === 'success'
+                    ? 'text-green-800'
+                    : status.type === 'error'
                       ? 'text-red-800'
                       : 'text-blue-800'
-                  }`}
+                    }`}
                 >
                   {status.message}
                 </p>
