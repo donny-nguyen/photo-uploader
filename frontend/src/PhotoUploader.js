@@ -63,7 +63,7 @@ export default function PhotoUploader() {
     const encryptedPassword = await encryptPassword(password);
 
     const payload = { key, operation, password: encryptedPassword };
-    if (description !== null && operation === "putobject") {
+    if (description !== null && operation === "put_object") {
       payload.description = description;
     }
 
@@ -72,6 +72,17 @@ export default function PhotoUploader() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
+    // Explicitly check for 401 Unauthorized
+    if (response.status === 401) {
+      const errorJson = await response.json();
+      // Set status to show error to user
+      setStatus({
+        type: "error",
+        message: errorJson.error || "Unauthorized: Invalid password",
+      });
+      throw new Error("Unauthorized: Invalid password");
+    }
 
     if (!response.ok) {
       throw new Error(`Failed to get presigned URL: ${response.statusText}`);
