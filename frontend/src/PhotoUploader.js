@@ -37,9 +37,11 @@ export default function PhotoUploader() {
 
   async function encryptPassword(password) {
     const encoder = new TextEncoder();
+
+    const base64Key = process.env.REACT_APP_AES_KEY;
     const keyMaterial = await crypto.subtle.importKey(
       "raw",
-      Uint8Array.from(atob("your-32-byte-base64-key"), c => c.charCodeAt(0)),
+      Uint8Array.from(atob(base64Key), c => c.charCodeAt(0)),
       { name: "AES-CBC" },
       false,
       ["encrypt"]
