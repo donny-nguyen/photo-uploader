@@ -60,7 +60,7 @@ export default function PhotoUploader() {
   const getPresignedUrl = async (key, operation, description = null) => {
     const encryptedPassword = await encryptPassword(password);
 
-    const payload = { key, operation, encryptedPassword };
+    const payload = { key, operation, password: encryptedPassword };
     if (description !== null && operation === "putobject") {
       payload.description = description;
     }
